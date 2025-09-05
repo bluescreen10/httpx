@@ -19,7 +19,7 @@ func main() {
     mux.HandleFunc("/", homeHandler)
     
     // Wrap with live reload middleware
-    server := httpx.LiveReload(mux, livereload.DefaultConfig)
+    server := httpx.LiveReload(mux, https.LiveReloadDefaultConfig)
     
     fmt.Println("Server with live reload running on http://localhost:8080")
     http.ListenAndServe(":8080", server)
