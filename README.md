@@ -4,6 +4,7 @@ HTTPx is a collection of HTTP utilities for Go that extend the standard net/http
 ## Features
 * 🔄 Live Reload: Automatic page reloading during development using Server-Sent Events
 * 🔎 Body Parsing: Parse request body into a user defined struct
+* 🪵 Logger: Writes request log with an specified format the console or stream
 
 ## Quick Start
 ```go
