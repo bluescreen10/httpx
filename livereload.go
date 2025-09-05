@@ -1,7 +1,7 @@
-// Package livereload provides HTTP middleware for automatically reloading web pages
+// LiveReload provides HTTP middleware for automatically reloading web pages
 // during development. It injects a client-side script into HTML responses that
 // connects to a Server-Sent Events (SSE) endpoint for real-time reload notifications.
-package livereload
+package httpx
 
 import (
 	"bytes"
@@ -13,14 +13,14 @@ import (
 	"time"
 )
 
-// DefaultConfig provides a default configuration for the livereload middleware
+// LiveReloadDefaultConfig provides a default configuration for the livereload middleware
 // with the SSE endpoint set to "/_livereload".
-var DefaultConfig = Config{
+var LiveReloadDefaultConfig = LiveReloadConfig{
 	Path: "/_livereload",
 }
 
 // Config holds the configuration options for the livereload middleware.
-type Config struct {
+type LiveReloadConfig struct {
 	// Path specifies the URL path for the Server-Sent Events endpoint
 	// that clients will connect to for reload notifications.
 	Path string
@@ -59,7 +59,7 @@ func (r *responseWriter) WriteHeader(statusCode int) {
 //go:embed reload.js
 var script []byte
 
-// Wrap wraps an http.Handler with livereload functionality. It intercepts
+// LiveReload wraps an http.Handler with livereload functionality. It intercepts
 // HTML responses and injects a client-side script that connects to the
 // configured SSE endpoint for reload notifications.
 //
@@ -75,9 +75,9 @@ var script []byte
 //	mux.HandleFunc("/", homeHandler)
 //
 //	// Wrap with livereload middleware
-//	server := livereload.Wrap(mux, livereload.DefaultConfig)
+//	server := httpx.LiveReload(mux, livereload.DefaultConfig)
 //	http.ListenAndServe(":8080", server)
-func Wrap(next http.Handler, config Config) http.Handler {
+func LiveReload(next http.Handler, config LiveReloadConfig) http.Handler {
 	js := bytes.ReplaceAll(script, []byte("/_livereload"), []byte(config.Path))
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -137,5 +137,7 @@ func handleClientConn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	notify := r.Context().Done()
+
+	// keep connection open until client disconnects
 	<-notify
 }

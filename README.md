@@ -11,7 +11,7 @@ package main
 import (
     "fmt"
     "net/http"
-    "github.com/bluescreen10/httpx/livereload"
+    "github.com/bluescreen10/httpx"
 )
 
 func main() {
@@ -19,7 +19,7 @@ func main() {
     mux.HandleFunc("/", homeHandler)
     
     // Wrap with live reload middleware
-    server := livereload.Wrap(mux, livereload.DefaultConfig)
+    server := httpx.LiveReload(mux, livereload.DefaultConfig)
     
     fmt.Println("Server with live reload running on http://localhost:8080")
     http.ListenAndServe(":8080", server)
@@ -51,11 +51,11 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 ## Custom Configuration
 ```go
 // Custom SSE endpoint path
-config := livereload.Config{
+config := LiveReloadConfig{
     Path: "/my-reload-endpoint",
 }
 
-server := livereload.Wrap(mux, config)
+server := httpx.LiveReload(mux, config)
 ```
 
 ## Contributing
