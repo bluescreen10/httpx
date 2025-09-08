@@ -98,13 +98,15 @@ func LiveReload(next http.Handler, config LiveReloadConfig) http.Handler {
 		if strings.Contains(contentType, "text/html") && closingBodyAt != -1 {
 			contentLength := len(body) + len(js)
 			rw.Header().Set("Content-Length", strconv.Itoa(contentLength))
-			rw.w.WriteHeader(rw.statusCode)
 			rw.w.Write(body[:closingBodyAt])
 			rw.w.Write(js)
 			rw.w.Write(body[closingBodyAt:])
 		} else {
-			rw.w.WriteHeader(rw.statusCode)
 			rw.w.Write(body)
+		}
+
+		if rw.statusCode != 0 {
+			rw.WriteHeader(rw.statusCode)
 		}
 
 	})

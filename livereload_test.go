@@ -38,6 +38,30 @@ func TestLiveReloadInjection(t *testing.T) {
 	}
 }
 
+func TestLiveReloadInjectionWithoutWriteHeader(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		fmt.Fprintf(w, "<html><body><h1>Hello</h1></body></html>")
+	})
+	ts := httptest.NewServer(httpx.LiveReload(handler, httpx.DefaultLiveReloadConfig))
+	defer ts.Close()
+
+	res, err := http.Get(ts.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer res.Body.Close()
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(string(body), "<script>") {
+		t.Fatal("injection not present")
+	}
+}
+
 func TestLiveReloadSkipInjection(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
