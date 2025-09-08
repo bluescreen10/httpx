@@ -15,7 +15,7 @@ import (
 
 // LiveReloadDefaultConfig provides a default configuration for the livereload middleware
 // with the SSE endpoint set to "/_livereload".
-var LiveReloadDefaultConfig = LiveReloadConfig{
+var DefaultLiveReloadConfig = LiveReloadConfig{
 	Path: "/_livereload",
 }
 
