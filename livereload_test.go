@@ -166,3 +166,20 @@ func TestLiveReloadSSE(t *testing.T) {
 		t.Fatal("missing event data")
 	}
 }
+
+func TestLiveReloadStatusCode(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotModified)
+	})
+	ts := httptest.NewServer(httpx.LiveReload(handler, httpx.DefaultLiveReloadConfig))
+	defer ts.Close()
+
+	res, err := http.Get(ts.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if res.StatusCode != http.StatusNotModified {
+		t.Fatalf("expecetd status code '%d' got '%d'", http.StatusNotModified, res.StatusCode)
+	}
+}

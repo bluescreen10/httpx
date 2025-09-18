@@ -90,25 +90,27 @@ func LiveReload(next http.Handler, config LiveReloadConfig) http.Handler {
 			w:    w,
 			body: &bytes.Buffer{},
 		}
+
 		next.ServeHTTP(&rw, r)
+
 		contentType := rw.Header().Get("Content-Type")
 		body := rw.body.Bytes()
 		closingBodyAt := bytes.Index(body, []byte("</body>"))
 
 		if strings.Contains(contentType, "text/html") && closingBodyAt != -1 {
-			contentLength := len(body) + len(js)
-			rw.Header().Set("Content-Length", strconv.Itoa(contentLength))
-			rw.w.Write(body[:closingBodyAt])
-			rw.w.Write(js)
-			rw.w.Write(body[closingBodyAt:])
+			w.Header().Set("Content-Length", strconv.Itoa(len(body)+len(js)))
+			if rw.statusCode != 0 {
+				w.WriteHeader(rw.statusCode)
+			}
+			w.Write(body[:closingBodyAt])
+			w.Write(js)
+			w.Write(body[closingBodyAt:])
 		} else {
-			rw.w.Write(body)
+			if rw.statusCode != 0 {
+				w.WriteHeader(rw.statusCode)
+			}
+			w.Write(body)
 		}
-
-		if rw.statusCode != 0 {
-			rw.WriteHeader(rw.statusCode)
-		}
-
 	})
 }
 
