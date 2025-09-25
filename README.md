@@ -6,6 +6,7 @@ HTTPx is a collection of HTTP utilities for Go that extend the standard net/http
 * 🔎 Body Parsing: Parse request body into a user defined struct
 * 🪵 Logger: Writes request log with an specified format the console or stream
 * 🏷️ ETag: Enabling efficient client-side caching
+* ⏰ Session: Simple and secure session management
 
 ## Quick Start
 ```go
