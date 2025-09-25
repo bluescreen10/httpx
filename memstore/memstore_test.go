@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bluescreen10/httpx/store/memstore"
+	"github.com/bluescreen10/httpx/memstore"
 )
 
 func TestSetGet(t *testing.T) {
