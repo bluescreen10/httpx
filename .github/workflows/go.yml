@@ -28,7 +28,7 @@ jobs:
     # Test each submodule under store/*
     - name: Test submodules
       run: |
-        for dir in ./store/*; do
+        for dir in ./*store; do
           if [ -f "$dir/go.mod" ]; then
             echo "===> Testing $dir"
             cd "$dir"

@@ -94,7 +94,7 @@ func (w *sessionResponseWriter) WriteHeader(statusCode int) {
 //	    "time"
 //
 //	    "github.com/bluescreen10/httpx/session"
-//	    "github.com/bluescreen10/httpx/store/memstore"
+//	    "github.com/bluescreen10/httpx/memstore"
 //	)
 //
 //	func main() {
