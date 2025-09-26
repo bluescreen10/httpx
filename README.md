@@ -42,9 +42,4 @@ func main() {
     fmt.Println("Server running on http://localhost:8080")
     http.ListenAndServe(":8080", mux)
 }
-Using LiveReload Middleware
-lr := livereload.New() // optional config via livereload.WithPath("/custom-path")
-server := lr.Handler(mux)
-
-http.ListenAndServe(":8080", server)
 ```
