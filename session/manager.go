@@ -168,7 +168,7 @@ func WithPersisted(persisted bool) config {
 
 // Handler wraps an http.Handler and provides load-and-save session functionality.
 // It ensures that the session is loaded from the store and saved after the request.
-func (m *Manager) Handler(next http.Handler) http.HandlerFunc {
+func (m *Manager) Handler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Vary", "Cookie")
 

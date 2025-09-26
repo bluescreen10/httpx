@@ -54,8 +54,8 @@ func TestCreateSession(t *testing.T) {
 	r1 := httptest.NewRequest("POST", "/", &bytes.Buffer{})
 	w1 := httptest.NewRecorder()
 
-	h1 = sm.Handler(h1)
-	h1.ServeHTTP(w1, r1)
+	h := sm.Handler(h1)
+	h.ServeHTTP(w1, r1)
 
 	store.get = func(string) ([]byte, bool, error) {
 		return storedData, true, nil
@@ -73,9 +73,8 @@ func TestCreateSession(t *testing.T) {
 	cookie := w1.Result().Header.Get("Set-Cookie")
 
 	r2.Header.Set("Cookie", cookie)
-	h2 = sm.Handler(h2)
-
-	h2.ServeHTTP(w2, r2)
+	h = sm.Handler(h2)
+	h.ServeHTTP(w2, r2)
 }
 
 func TestCreateSessionWithCookie(t *testing.T) {
@@ -106,8 +105,8 @@ func TestCreateSessionWithCookie(t *testing.T) {
 	r1.Header.Set("Cookie", cookie)
 	w1 := httptest.NewRecorder()
 
-	h1 = sm.Handler(h1)
-	h1.ServeHTTP(w1, r1)
+	h := sm.Handler(h1)
+	h.ServeHTTP(w1, r1)
 
 	store.get = func(string) ([]byte, bool, error) {
 		return storedData, true, nil
@@ -123,9 +122,9 @@ func TestCreateSessionWithCookie(t *testing.T) {
 	r2 := httptest.NewRequest("GET", "/", &bytes.Buffer{})
 	w2 := httptest.NewRecorder()
 	r2.Header.Set("Cookie", cookie)
-	h2 = sm.Handler(h2)
 
-	h2.ServeHTTP(w2, r2)
+	h = sm.Handler(h2)
+	h.ServeHTTP(w2, r2)
 }
 
 func TestErrorLoadingSession(t *testing.T) {
@@ -145,8 +144,8 @@ func TestErrorLoadingSession(t *testing.T) {
 	r.Header.Set("Cookie", cookie)
 	w := httptest.NewRecorder()
 
-	h = sm.Handler(h)
-	h.ServeHTTP(w, r)
+	h1 := sm.Handler(h)
+	h1.ServeHTTP(w, r)
 
 	if status := w.Result().StatusCode; status != http.StatusInternalServerError {
 		t.Fatalf("expected status '500' got '%d'", status)
@@ -176,8 +175,8 @@ func TestErrorSaveSession(t *testing.T) {
 	r.Header.Set("Cookie", cookie)
 	w := httptest.NewRecorder()
 
-	h = sm.Handler(h)
-	h.ServeHTTP(w, r)
+	h1 := sm.Handler(h)
+	h1.ServeHTTP(w, r)
 
 	if cookie := w.Result().Header.Get("Set-Cookie"); cookie != "" {
 		t.Fatal("expected no cookie but got one")
@@ -212,8 +211,8 @@ func TestErrorDeleteSession(t *testing.T) {
 	r.Header.Set("Cookie", cookie)
 	w := httptest.NewRecorder()
 
-	h = sm.Handler(h)
-	h.ServeHTTP(w, r)
+	h1 := sm.Handler(h)
+	h1.ServeHTTP(w, r)
 
 	if cookie := w.Result().Header.Get("Set-Cookie"); cookie != "" {
 		t.Fatal("expected no cookie but got one")
@@ -248,8 +247,8 @@ func TestDestroySession(t *testing.T) {
 	r := httptest.NewRequest("POST", "/", &bytes.Buffer{})
 	w := httptest.NewRecorder()
 
-	h = sm.Handler(h)
-	h.ServeHTTP(w, r)
+	h1 := sm.Handler(h)
+	h1.ServeHTTP(w, r)
 
 	if !called {
 		t.Fatal("expected delete to be called")
@@ -276,8 +275,8 @@ func TestSessionIdleTimeout(t *testing.T) {
 	r := httptest.NewRequest("POST", "/", &bytes.Buffer{})
 	w := httptest.NewRecorder()
 
-	h = sm.Handler(h)
-	h.ServeHTTP(w, r)
+	h1 := sm.Handler(h)
+	h1.ServeHTTP(w, r)
 
 	cookie := w.Result().Cookies()[0]
 
@@ -369,6 +368,6 @@ func TestSessionValues(t *testing.T) {
 	r := httptest.NewRequest("POST", "/", &bytes.Buffer{})
 	w := httptest.NewRecorder()
 
-	h = sm.Handler(h)
-	h.ServeHTTP(w, r)
+	h1 := sm.Handler(h)
+	h1.ServeHTTP(w, r)
 }
