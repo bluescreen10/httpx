@@ -1,66 +1,50 @@
 # HTTPx - HTTP Extras for Go
-HTTPx is a collection of HTTP utilities for Go that extend the standard net/http package with commonly needed functionality for web development.
+
+HTTPx is a collection of HTTP utilities for Go that extend the standard `net/http` package with commonly needed functionality for web development. It provides middlewares, request helpers, and session management to simplify building robust web servers.
 
 ## Features
-* 🔄 Live Reload: Automatic page reloading during development using Server-Sent Events
-* 🔎 Body Parsing: Parse request body into a user defined struct
-* 🪵 Logger: Writes request log with an specified format the console or stream
-* 🏷️ ETag: Enabling efficient client-side caching
-* ⏰ Session: Simple and secure session management
+* 🔄 **LiveReload** – Automatically reloads web pages during development using Server-Sent Events.
+* 🔎 **Body Parsing** – Parse request bodies into a user-defined struct, supporting JSON, XML, and form data.
+* 🪵 **Logger** – Log HTTP requests with customizable formats to console or any `io.Writer`.
+* 🏷️ **ETag** – Enables efficient client-side caching via automatic ETag headers.
+* ⏰ **Session** – Secure and simple session management with cookie-based storage and pluggable backends.
+* 🧩 **Mux** – Grouped routing with middleware support, making it easy to organize complex HTTP routes.
 
 ## Quick Start
+
+Below is an example of using `httpx.ServeMux` with the Logger middleware:
+
 ```go
 package main
 
 import (
     "fmt"
     "net/http"
+    "time"
+
     "github.com/bluescreen10/httpx"
+    "github.com/bluescreen10/httpx/logger"
 )
 
 func main() {
-    mux := http.NewServeMux()
-    mux.HandleFunc("/", homeHandler)
-    
-    // Wrap with live reload middleware
-    server := httpx.LiveReload(mux, https.LiveReloadDefaultConfig)
-    
-    fmt.Println("Server with live reload running on http://localhost:8080")
-    http.ListenAndServe(":8080", server)
-}
+    // Create a new ServeMux
+    mux := httpx.NewServeMux()
 
-func homeHandler(w http.ResponseWriter, r *http.Request) {
-    html := `
-<!DOCTYPE html>
-<html>
-<head>
-    <title>HTTPx Live Reload</title>
-</head>
-<body>
-    <h1>Hello World!</h1>
-    <p>Edit this file and watch it reload automatically!</p>
-</body>
-</html>`
-    
-    w.Header().Set("Content-Type", "text/html")
-    fmt.Fprint(w, html)
+    // Attach Logger middleware
+    mux.Use(logger.New(logger.WithFormat("${time} | ${status} | ${method} | ${path}\n")))
+
+    // Define routes
+    mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        fmt.Fprint(w, "Hello, HTTPx!")
+    }))
+
+    // Start the server
+    fmt.Println("Server running on http://localhost:8080")
+    http.ListenAndServe(":8080", mux)
 }
+Using LiveReload Middleware
+lr := livereload.New() // optional config via livereload.WithPath("/custom-path")
+server := lr.Handler(mux)
+
+http.ListenAndServe(":8080", server)
 ```
-
-## How It Works
-* Script Injection: The middleware intercepts HTML responses and injects a JavaScript snippet before the closing </body> tag
-* SSE Connection: The injected script establishes a Server-Sent Events connection to the configured endpoint
-* Reload Trigger: When you trigger a reload event, all connected clients automatically refresh their pages
-
-## Custom Configuration
-```go
-// Custom SSE endpoint path
-config := LiveReloadConfig{
-    Path: "/my-reload-endpoint",
-}
-
-server := httpx.LiveReload(mux, config)
-```
-
-## Contributing
-Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.

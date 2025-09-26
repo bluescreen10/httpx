@@ -12,38 +12,57 @@ import (
 	"strings"
 )
 
-// ParseBody parses the HTTP request body into a struct based on the Content-Type header.
+// ParseBody parses the HTTP request body into the provided struct
+// based on the Content-Type header.
 //
-// The function automatically detects the content type and applies the appropriate
-// parsing strategy:
-//   - Form data (application/x-www-form-urlencoded, multipart/form-data, text/plain):
-//     Uses struct tags with `form:"fieldname"` to map form fields to struct fields
-//   - JSON (application/json): Uses json.Unmarshal with `json` struct tags
-//   - XML (application/xml): Uses xml.Unmarshal with `xml` struct tags
+// Supported content types:
+//   - application/x-www-form-urlencoded, multipart/form-data, text/plain:
+//     Uses `form:"fieldname"` struct tags to map form fields to struct fields.
+//   - application/json: Uses `json` struct tags for mapping.
+//   - application/xml: Uses `xml` struct tags for mapping.
 //
 // The dst parameter must be a pointer to a struct.
 //
-// For form data parsing, the function supports the following field types:
+// Form parsing supports these field types:
 //   - string
 //   - int, int8, int16, int32, int64
 //   - uint, uint8, uint16, uint32, uint64
 //   - float32, float64
-//   - bool (accepts various representations like "on"/"off", "1"/"0", "yes"/"no", "true"/"false")
+//   - bool ("on"/"off", "1"/"0", "yes"/"no", "true"/"false")
 //   - slices of the above types
 //
-// Form struct tags support the following format:
+// Form struct tags can specify options, e.g.:
 //
-//	`form:"fieldname,option1,option2"`
+//	type MyForm struct {
+//	    Name string `form:"name,required"`
+//	}
 //
-// Available options:
-//   - required: Field must be present in the form data
+// The only supported option currently is "required".
 //
 // Returns an error if:
-//   - The destination is not a pointer to a struct
-//   - The content type is not supported
-//   - Required fields are missing (form data only)
-//   - Field values cannot be converted to the target type
-//   - The request body cannot be read or parsed
+//   - dst is not a pointer to a struct
+//   - content type is unsupported
+//   - required form fields are missing
+//   - conversion to the target type fails
+//   - request body cannot be read or parsed
+//
+// Usage:
+//
+//	type CreateUserRequest struct {
+//	    Name     string `form:"name,required"`
+//	    Age      int    `form:"age"`
+//	    Email    string `form:"email"`
+//	    IsActive bool   `form:"is_active"`
+//	}
+//
+//	func handler(w http.ResponseWriter, r *http.Request) {
+//	    var req CreateUserRequest
+//	    if err := httpx.ParseBody(r, &req); err != nil {
+//	        http.Error(w, err.Error(), http.StatusBadRequest)
+//	        return
+//	    }
+//	    fmt.Fprintf(w, "Parsed: %+v", req)
+//	}
 func ParseBody(r *http.Request, dst any) error {
 	switch r.Header.Get("Content-Type") {
 	case "application/x-www-form-urlencoded", "multipart/form-data", "text/plain":

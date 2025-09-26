@@ -1,90 +1,9 @@
 // Package session provides a middleware-based session management system
 // for HTTP servers in Go. It supports cookie-based sessions, idle timeouts,
 // configurable persistence, and pluggable serialization codecs.
-// designed heavily inspired by: https://github.com/alexedwards/scs
-package session
-
-import (
-	"context"
-	"net/http"
-	"sync"
-	"time"
-)
-
-// Options contains configuration for sessions, including cookie parameters,
-// lifetime, idle timeout, and serialization codec.
-type Options struct {
-	// LifeTime is the maximum duration for which the session is valid. (default 24hr)
-	LifeTime time.Duration
-
-	// IdleTimeout is the maximum duration of inactivity before a session expires. (default 0 -> no timeout)
-	IdleTimeout time.Duration
-
-	// Codec is responsible for encoding and decoding session data.
-	Codec Codec
-
-	// Name sets the cookie Name
-	Name string
-
-	// Path restricts the cookie to a specific path
-	Path string
-
-	// Domain restricts the cookie to a specific domain
-	Domain string
-
-	// Secure indicates the cookie should only be sent over HTTPS
-	Secure bool
-
-	// HttpOnly prevents client-side JavaScript access to the cookie
-	HttpOnly bool
-
-	// Partitioned indicates the cookie is partitioned (Chrome's CHIPS)
-	Partitioned bool
-
-	// SameSite controls when cookies are sent with cross-site requests
-	SameSite http.SameSite
-
-	// Persisted determines if the cookie should be persisted or destroyed
-	// when the user closes the browser
-	Persisted bool
-}
-
-// contextKey is an unexported type used for context keys to avoid collisions.
-type contextKey int
-
-var currentKey contextKey = 0
-var mu sync.Mutex
-
-// sessionResponseWriter wraps http.ResponseWriter to intercept writes
-// and ensure the session is saved before any headers or body are written.
-type sessionResponseWriter struct {
-	http.ResponseWriter
-	mngr      *Manager
-	sess      *Session
-	isWritten bool
-}
-
-// Write saves the session before writing the response body if it hasn't
-// already been saved.
-func (w *sessionResponseWriter) Write(b []byte) (int, error) {
-	if !w.isWritten {
-		w.isWritten = true
-		w.mngr.save(w.ResponseWriter, w.sess)
-	}
-	return w.ResponseWriter.Write(b)
-}
-
-// WriteHeader saves the session before writing the response headers
-// if it hasn't already been saved.
-func (w *sessionResponseWriter) WriteHeader(statusCode int) {
-	if !w.isWritten {
-		w.isWritten = true
-		w.mngr.save(w.ResponseWriter, w.sess)
-	}
-	w.ResponseWriter.WriteHeader(statusCode)
-}
-
-// Example demonstrates creating a Manager and using the LoadAndSave middleware.
+// Designed heavily inspired by: https://github.com/alexedwards/scs
+//
+// Usage:
 //
 //	package main
 //
@@ -101,11 +20,11 @@ func (w *sessionResponseWriter) WriteHeader(statusCode int) {
 //	    store := memstore.New()
 //	    mgr := session.NewManager(store, session.Options{
 //	        Name:     "my_session",
-//	        LifeTime: 2 * time.Hour,
+//	        Lifetime: 2 * time.Hour,
 //	    })
 //
 //	    mux := http.NewServeMux()
-//	    mux.Handle("/", mgr.LoadAndSave(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+//	    mux.Handle("/", mgr.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 //	        sess := mgr.Get(r)
 //	        count := sess.GetInt("count")
 //	        count++
@@ -116,21 +35,145 @@ func (w *sessionResponseWriter) WriteHeader(statusCode int) {
 //	    http.ListenAndServe(":8080", mux)
 //	}
 //
-// Manager manages HTTP sessions using a Store backend and session Options.
-type Manager struct {
-	store Store
-	opts  Options
-	key   contextKey
+// designed heavily inspired by: https://github.com/alexedwards/scs
+package session
+
+import (
+	"context"
+	"net/http"
+	"time"
+)
+
+// responseWriter wraps http.ResponseWriter to intercept writes
+// and ensure the session is saved before any headers or body are written.
+type responseWriter struct {
+	http.ResponseWriter
+	mngr      *Manager
+	sess      *Session
+	isWritten bool
 }
 
-// LoadAndSave is an HTTP middleware that automatically loads a session from
-// the request cookie and saves it back to the store after the handler executes.
-func (m *Manager) LoadAndSave(next http.Handler) http.HandlerFunc {
+// Write saves the session before writing the response body if it hasn't
+// already been saved.
+func (w *responseWriter) Write(b []byte) (int, error) {
+	if !w.isWritten {
+		w.isWritten = true
+		w.mngr.save(w.ResponseWriter, w.sess)
+	}
+	return w.ResponseWriter.Write(b)
+}
+
+// WriteHeader saves the session before writing the response headers
+// if it hasn't already been saved.
+func (w *responseWriter) WriteHeader(statusCode int) {
+	if !w.isWritten {
+		w.isWritten = true
+		w.mngr.save(w.ResponseWriter, w.sess)
+	}
+	w.ResponseWriter.WriteHeader(statusCode)
+}
+
+// Middleware-based session management stores session data in a Store backend,
+// manages cookies, handles idle timeouts, and provides a load/save workflow
+// automatically via the Handler middleware interface.
+
+// Manager manages HTTP sessions using a Store backend and session options.
+type Manager struct {
+	store             Store
+	lifetime          time.Duration
+	idleTimeout       time.Duration
+	codec             Codec
+	cookieName        string
+	cookiePath        string
+	cookieDomain      string
+	cookieSecure      bool
+	cookieHttpOnly    bool
+	cookiePartitioned bool
+	cookieSameSite    http.SameSite
+	cookiePersisted   bool
+	key               *struct{}
+}
+
+type config func(*Manager)
+
+// WithLifetime sets the lifetime of the session. (default 24hr.)
+func WithLifetime(lifetime time.Duration) config {
+	return config(func(m *Manager) {
+		m.lifetime = lifetime
+	})
+}
+
+// WithIdleTimeout sets the idle timeout for the session. (default no timeout.)
+func WithIdleTimeout(timeout time.Duration) config {
+	return config(func(m *Manager) {
+		m.idleTimeout = timeout
+	})
+}
+
+// WithName sets the cookie name for the session. (default "session_id".)
+func WithName(name string) config {
+	return config(func(m *Manager) {
+		m.cookieName = name
+	})
+}
+
+// WithPath sets the cookie path. (default "/".)
+func WithPath(Path string) config {
+	return config(func(m *Manager) {
+		m.cookiePath = Path
+	})
+}
+
+// WithDomain sets the cookie domain. (default "".)
+func WithDomain(Domain string) config {
+	return config(func(m *Manager) {
+		m.cookieDomain = Domain
+	})
+}
+
+// WithSecure sets the Secure flag on the cookie. (default false)
+func WithSecure(secure bool) config {
+	return config(func(m *Manager) {
+		m.cookieSecure = secure
+	})
+}
+
+// WithHttpOnly sets the HttpOnly flag on the cookie. (default true)
+func WithHttpOnly(httpOnly bool) config {
+	return config(func(m *Manager) {
+		m.cookieHttpOnly = httpOnly
+	})
+}
+
+// WithPartitioned sets the Partitioned flag on the cookie. (default false)
+func WithPartitioned(partitioned bool) config {
+	return config(func(m *Manager) {
+		m.cookiePartitioned = partitioned
+	})
+}
+
+// WithSameSite sets the SameSite policy for the cookie. (default Lax)
+func WithSameSite(sameSite http.SameSite) config {
+	return config(func(m *Manager) {
+		m.cookieSameSite = sameSite
+	})
+}
+
+// WithPersisted sets whether the cookie is persisted. (default true)
+func WithPersisted(persisted bool) config {
+	return config(func(m *Manager) {
+		m.cookiePersisted = persisted
+	})
+}
+
+// Handler wraps an http.Handler and provides load-and-save session functionality.
+// It ensures that the session is loaded from the store and saved after the request.
+func (m *Manager) Handler(next http.Handler) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Vary", "Cookie")
 
 		var token string
-		cookie, err := r.Cookie(m.opts.Name)
+		cookie, err := r.Cookie(m.cookieName)
 		if err == nil {
 			token = cookie.Value
 		}
@@ -141,7 +184,7 @@ func (m *Manager) LoadAndSave(next http.Handler) http.HandlerFunc {
 		}
 
 		sr := r.WithContext(context.WithValue(r.Context(), m.key, sess))
-		sw := &sessionResponseWriter{w, m, sess, false}
+		sw := &responseWriter{w, m, sess, false}
 		next.ServeHTTP(sw, sr)
 
 		if !sw.isWritten {
@@ -150,10 +193,14 @@ func (m *Manager) LoadAndSave(next http.Handler) http.HandlerFunc {
 	})
 }
 
-// Get retrieves the current session from the request context.
-// It always returns a valid session object, never nil.
+// Get retrieves the current session from the request context. It always
+// returns a valid session object, never nil.
 func (m *Manager) Get(r *http.Request) *Session {
-	return r.Context().Value(m.key).(*Session)
+	sess, ok := r.Context().Value(m.key).(*Session)
+	if !ok {
+		return newSession()
+	}
+	return sess
 }
 
 // load retrieves a session from the store by token. If the token is empty
@@ -173,7 +220,7 @@ func (m *Manager) load(token string) (*Session, error) {
 		return newSession(), nil
 	}
 
-	createdAt, values, err := m.opts.Codec.Decode(data)
+	createdAt, values, err := m.codec.Decode(data)
 	if err != nil {
 		return nil, err
 	}
@@ -193,10 +240,10 @@ func (m *Manager) save(w http.ResponseWriter, sess *Session) error {
 		return nil
 	}
 
-	expiresAt := sess.createdAt.Add(m.opts.LifeTime)
+	expiresAt := sess.createdAt.Add(m.lifetime)
 
 	if sess.isModified {
-		data, err := m.opts.Codec.Encode(sess.createdAt, sess.values)
+		data, err := m.codec.Encode(sess.createdAt, sess.values)
 		if err != nil {
 			return err
 		}
@@ -206,8 +253,8 @@ func (m *Manager) save(w http.ResponseWriter, sess *Session) error {
 		}
 	}
 
-	if m.opts.IdleTimeout > 0 {
-		idleExpires := time.Now().Add(m.opts.IdleTimeout)
+	if m.idleTimeout > 0 {
+		idleExpires := time.Now().Add(m.idleTimeout)
 		if idleExpires.Before(expiresAt) {
 			expiresAt = idleExpires
 		}
@@ -220,19 +267,19 @@ func (m *Manager) save(w http.ResponseWriter, sess *Session) error {
 func (m *Manager) writeCookie(w http.ResponseWriter, token string, expiresAt time.Time) {
 	cookie := &http.Cookie{
 		Value:       token,
-		Name:        m.opts.Name,
-		Domain:      m.opts.Domain,
-		HttpOnly:    m.opts.HttpOnly,
-		Path:        m.opts.Path,
-		SameSite:    m.opts.SameSite,
-		Secure:      m.opts.Secure,
-		Partitioned: m.opts.Partitioned,
+		Name:        m.cookieName,
+		Domain:      m.cookieDomain,
+		HttpOnly:    m.cookieHttpOnly,
+		Path:        m.cookiePath,
+		SameSite:    m.cookieSameSite,
+		Secure:      m.cookieSecure,
+		Partitioned: m.cookiePartitioned,
 	}
 
 	if expiresAt.IsZero() {
 		cookie.Expires = time.Unix(1, 0)
 		cookie.MaxAge = -1
-	} else if m.opts.Persisted {
+	} else if m.cookiePersisted {
 		cookie.Expires = time.Unix(expiresAt.Unix()+1, 0)
 		cookie.MaxAge = int(time.Until(expiresAt).Seconds() + 1)
 	}
@@ -240,60 +287,22 @@ func (m *Manager) writeCookie(w http.ResponseWriter, token string, expiresAt tim
 	http.SetCookie(w, cookie)
 }
 
-// NewManager creates a new session Manager with the given store and optional
-// session Options.
-func NewManager(store Store, opts ...Options) *Manager {
-	mngr := new(Manager)
-	mngr.store = store
-	mngr.opts = defaultOptions
+// NewManager creates a new session Manager with a Store and optional configuration.
+func NewManager(store Store, cfgs ...config) *Manager {
+	mngr := &Manager{
+		lifetime:        24 * time.Hour,
+		codec:           gobCodec{},
+		cookieName:      "session_id",
+		cookiePath:      "/",
+		cookieHttpOnly:  true,
+		cookieSameSite:  http.SameSiteLaxMode,
+		cookiePersisted: true,
+		store:           store,
+	}
 
-	// obtain a context key
-	mu.Lock()
-	mngr.key = currentKey
-	currentKey++
-	mu.Unlock()
-
-	for _, o := range opts {
-		if o.Domain != "" {
-			mngr.opts.Domain = o.Domain
-		}
-
-		if o.Path != "" {
-			mngr.opts.Path = o.Path
-		}
-
-		if o.Name != "" {
-			mngr.opts.Name = o.Name
-		}
-
-		if o.LifeTime > 0 {
-			mngr.opts.LifeTime = o.LifeTime
-		}
-
-		if o.SameSite > 0 {
-			mngr.opts.SameSite = o.SameSite
-		}
-
-		if o.Codec != nil {
-			mngr.opts.Codec = o.Codec
-		}
-
-		mngr.opts.HttpOnly = o.HttpOnly
-		mngr.opts.Partitioned = o.Partitioned
-		mngr.opts.Secure = o.Secure
-		mngr.opts.IdleTimeout = o.IdleTimeout
-		mngr.opts.Persisted = o.Persisted
+	for _, cfg := range cfgs {
+		cfg(mngr)
 	}
 
 	return mngr
-}
-
-var defaultOptions = Options{
-	LifeTime:  24 * time.Hour,
-	Codec:     gobCodec{},
-	Name:      "session_id",
-	Path:      "/",
-	HttpOnly:  true,
-	SameSite:  http.SameSiteLaxMode,
-	Persisted: true,
 }

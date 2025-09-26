@@ -54,7 +54,7 @@ func TestCreateSession(t *testing.T) {
 	r1 := httptest.NewRequest("POST", "/", &bytes.Buffer{})
 	w1 := httptest.NewRecorder()
 
-	h1 = sm.LoadAndSave(h1)
+	h1 = sm.Handler(h1)
 	h1.ServeHTTP(w1, r1)
 
 	store.get = func(string) ([]byte, bool, error) {
@@ -73,7 +73,7 @@ func TestCreateSession(t *testing.T) {
 	cookie := w1.Result().Header.Get("Set-Cookie")
 
 	r2.Header.Set("Cookie", cookie)
-	h2 = sm.LoadAndSave(h2)
+	h2 = sm.Handler(h2)
 
 	h2.ServeHTTP(w2, r2)
 }
@@ -106,7 +106,7 @@ func TestCreateSessionWithCookie(t *testing.T) {
 	r1.Header.Set("Cookie", cookie)
 	w1 := httptest.NewRecorder()
 
-	h1 = sm.LoadAndSave(h1)
+	h1 = sm.Handler(h1)
 	h1.ServeHTTP(w1, r1)
 
 	store.get = func(string) ([]byte, bool, error) {
@@ -123,7 +123,7 @@ func TestCreateSessionWithCookie(t *testing.T) {
 	r2 := httptest.NewRequest("GET", "/", &bytes.Buffer{})
 	w2 := httptest.NewRecorder()
 	r2.Header.Set("Cookie", cookie)
-	h2 = sm.LoadAndSave(h2)
+	h2 = sm.Handler(h2)
 
 	h2.ServeHTTP(w2, r2)
 }
@@ -145,7 +145,7 @@ func TestErrorLoadingSession(t *testing.T) {
 	r.Header.Set("Cookie", cookie)
 	w := httptest.NewRecorder()
 
-	h = sm.LoadAndSave(h)
+	h = sm.Handler(h)
 	h.ServeHTTP(w, r)
 
 	if status := w.Result().StatusCode; status != http.StatusInternalServerError {
@@ -176,7 +176,7 @@ func TestErrorSaveSession(t *testing.T) {
 	r.Header.Set("Cookie", cookie)
 	w := httptest.NewRecorder()
 
-	h = sm.LoadAndSave(h)
+	h = sm.Handler(h)
 	h.ServeHTTP(w, r)
 
 	if cookie := w.Result().Header.Get("Set-Cookie"); cookie != "" {
@@ -212,7 +212,7 @@ func TestErrorDeleteSession(t *testing.T) {
 	r.Header.Set("Cookie", cookie)
 	w := httptest.NewRecorder()
 
-	h = sm.LoadAndSave(h)
+	h = sm.Handler(h)
 	h.ServeHTTP(w, r)
 
 	if cookie := w.Result().Header.Get("Set-Cookie"); cookie != "" {
@@ -248,7 +248,7 @@ func TestDestroySession(t *testing.T) {
 	r := httptest.NewRequest("POST", "/", &bytes.Buffer{})
 	w := httptest.NewRecorder()
 
-	h = sm.LoadAndSave(h)
+	h = sm.Handler(h)
 	h.ServeHTTP(w, r)
 
 	if !called {
@@ -258,7 +258,11 @@ func TestDestroySession(t *testing.T) {
 
 func TestSessionIdleTimeout(t *testing.T) {
 	store := &mockstore{}
-	sm := session.NewManager(store, session.Options{IdleTimeout: 10 * time.Minute, HttpOnly: true, Persisted: true})
+	sm := session.NewManager(store,
+		session.WithIdleTimeout(10*time.Minute),
+		session.WithHttpOnly(true),
+		session.WithPersisted(true),
+	)
 
 	store.get = func(string) ([]byte, bool, error) {
 		return []byte{}, false, errors.New("test")
@@ -272,7 +276,7 @@ func TestSessionIdleTimeout(t *testing.T) {
 	r := httptest.NewRequest("POST", "/", &bytes.Buffer{})
 	w := httptest.NewRecorder()
 
-	h = sm.LoadAndSave(h)
+	h = sm.Handler(h)
 	h.ServeHTTP(w, r)
 
 	cookie := w.Result().Cookies()[0]
@@ -365,6 +369,6 @@ func TestSessionValues(t *testing.T) {
 	r := httptest.NewRequest("POST", "/", &bytes.Buffer{})
 	w := httptest.NewRecorder()
 
-	h = sm.LoadAndSave(h)
+	h = sm.Handler(h)
 	h.ServeHTTP(w, r)
 }

@@ -1,4 +1,4 @@
-package httpx_test
+package logger_test
 
 import (
 	"bytes"
@@ -6,25 +6,22 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/bluescreen10/httpx"
+	"github.com/bluescreen10/httpx/logger"
 )
 
 func TestLogger(t *testing.T) {
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(50 * time.Microsecond)
 		w.WriteHeader(404)
 	})
 
-	format := httpx.DefaultLoggerConfig.Format
-	output := bytes.Buffer{}
-	logger := httpx.Logger(h, httpx.LoggerConfig{Format: format, Output: &output})
+	output := &bytes.Buffer{}
+	logger := logger.New(logger.WithOutput(output))
 
 	r := httptest.NewRequest("GET", "/endpoint", &bytes.Buffer{})
 	w := httptest.NewRecorder()
 
-	logger.ServeHTTP(w, r)
+	logger.Handler(h).ServeHTTP(w, r)
 
 	log := output.String()
 	if !strings.Contains(log, " GET ") ||
