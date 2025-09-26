@@ -1,6 +1,6 @@
 # HTTPx - HTTP Extras for Go
 
-HTTPx is a collection of HTTP utilities for Go that extend the standard `net/http` package with commonly needed functionality for web development. It provides middlewares, request helpers, and session management to simplify building robust web servers.
+HTTPx is a collection of HTTP utilities for Go that extend the standard `net/http` package with commonly needed functionality for web development. It provides middlewares, request helpers, and session management to simplify building robust webapps.
 
 ## Features
 * 🔄 **LiveReload** – Automatically reloads web pages during development using Server-Sent Events.
