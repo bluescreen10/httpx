@@ -81,7 +81,7 @@ func LiveReloadWithConfig(cfg LiveReloadConfig) Middleware {
 			}
 
 			buf := &bytes.Buffer{}
-			rw := newResponseWriter(buf, w.Header())
+			rw := newResponseWriter(buf, w.Header(), nil)
 			next.ServeHTTP(rw, r)
 
 			body := buf.Bytes()

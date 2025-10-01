@@ -75,7 +75,7 @@ func ETagWithConfig(cfg ETagConfig) Middleware {
 			buf := &bytes.Buffer{}
 			table := crc64.MakeTable(crc64.ECMA)
 			header := w.Header()
-			rw := newResponseWriter(buf, header)
+			rw := newResponseWriter(buf, header, nil)
 			next.ServeHTTP(rw, r)
 
 			checksum := crc64.Update(0, table, buf.Bytes())

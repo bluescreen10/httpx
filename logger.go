@@ -57,7 +57,7 @@ func LoggerWithConfig(cfg LoggerConfig) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
-			rw := newResponseWriter(w, w.Header())
+			rw := newResponseWriter(w, w.Header(), w.WriteHeader)
 			next.ServeHTTP(rw, r)
 
 			latency := time.Since(start)
