@@ -31,7 +31,7 @@ func main() {
     mux := httpx.NewServeMux()
 
     // Attach Logger middleware
-    mux.Use(logger.New(logger.WithFormat("${time} | ${status} | ${method} | ${path}\n")))
+    mux.Use(httpx.Logger())
 
     // Define routes
     mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

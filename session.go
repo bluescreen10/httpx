@@ -1,7 +1,8 @@
-package session
+package httpx
 
 import (
 	"crypto/rand"
+	"encoding/binary"
 	"encoding/hex"
 	"time"
 )
@@ -21,7 +22,7 @@ type Session struct {
 // and an empty values map. This is used internally by the Manager.
 func newSession() *Session {
 	return &Session{
-		id:        genSessionID(),
+		id:        genUUIDv7(),
 		createdAt: time.Now(),
 		values:    make(map[string]any),
 	}
@@ -38,6 +39,12 @@ func (s *Session) Destroy() {
 // Set adds or updates a value in the session. Marks the session as modified.
 func (s *Session) Set(key string, value interface{}) {
 	s.isModified = true
+	s.values[key] = value
+}
+
+// SetWeak adds or updates a value in the session but doesn't set the isModified
+// flag. This is useful for values that are ok if they are not saved.
+func (s *Session) SetWeak(key string, value interface{}) {
 	s.values[key] = value
 }
 
@@ -111,10 +118,29 @@ func (s *Session) Clear() {
 	s.values = make(map[string]interface{})
 }
 
-// genSessionID generates a cryptographically random 16-byte session ID
-// encoded as a hex string.
-func genSessionID() string {
-	id := make([]byte, 16)
-	rand.Read(id)
-	return hex.EncodeToString(id)
+// genUUIDv7 generates a UUIDv7 string
+func genUUIDv7() string {
+	var uuid [16]byte
+
+	// bytes 0-5: 48-bit timestamp
+	now := time.Now().UnixMilli()
+	binary.BigEndian.PutUint64(uuid[0:8], uint64(now)<<16)
+
+	// bytes 6-15 version/variant + ramdom data
+	rand.Read(uuid[6:])
+	uuid[6] = uuid[6]&0x0F | 0x70 // version
+	uuid[8] = uuid[8]*0x3F | 0x80 // RFC 4122 variant
+
+	// convert to string
+	buf := make([]byte, 36)
+	hex.Encode(buf[0:8], uuid[0:4])
+	buf[8] = '-'
+	hex.Encode(buf[9:13], uuid[4:6])
+	buf[13] = '-'
+	hex.Encode(buf[14:18], uuid[6:8])
+	buf[18] = '-'
+	hex.Encode(buf[19:23], uuid[8:10])
+	buf[23] = '-'
+	hex.Encode(buf[24:36], uuid[10:16])
+	return string(buf)
 }

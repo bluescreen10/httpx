@@ -1,4 +1,4 @@
-package session_test
+package httpx_test
 
 import (
 	"bytes"
@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bluescreen10/httpx/session"
+	"github.com/bluescreen10/httpx"
 )
 
 type mockstore struct {
@@ -29,11 +29,11 @@ func (s *mockstore) Delete(token string) error {
 	return s.delete(token)
 }
 
-var _ session.Store = &mockstore{}
+var _ httpx.Store = &mockstore{}
 
 func TestCreateSession(t *testing.T) {
 	store := &mockstore{}
-	sm := session.NewManager(store)
+	sm := httpx.NewSessionManager(store)
 
 	expectedId := 123
 	store.get = func(string) ([]byte, bool, error) {
@@ -62,8 +62,8 @@ func TestCreateSession(t *testing.T) {
 	}
 
 	h2 := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		session := sm.Get(r)
-		if id := session.GetInt("user_id"); id != expectedId {
+		sess := sm.Get(r)
+		if id := sess.GetInt("user_id"); id != expectedId {
 			t.Fatalf("expected value '%d' got '%d'", expectedId, id)
 		}
 	})
@@ -79,7 +79,7 @@ func TestCreateSession(t *testing.T) {
 
 func TestCreateSessionWithCookie(t *testing.T) {
 	store := &mockstore{}
-	sm := session.NewManager(store)
+	sm := httpx.NewSessionManager(store)
 
 	expectedId := 123
 	store.get = func(string) ([]byte, bool, error) {
@@ -113,8 +113,8 @@ func TestCreateSessionWithCookie(t *testing.T) {
 	}
 
 	h2 := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		session := sm.Get(r)
-		if id := session.GetInt("user_id"); id != expectedId {
+		sess := sm.Get(r)
+		if id := sess.GetInt("user_id"); id != expectedId {
 			t.Fatalf("expected value '%d' got '%d'", expectedId, id)
 		}
 	})
@@ -129,7 +129,7 @@ func TestCreateSessionWithCookie(t *testing.T) {
 
 func TestErrorLoadingSession(t *testing.T) {
 	store := &mockstore{}
-	sm := session.NewManager(store)
+	sm := httpx.NewSessionManager(store)
 
 	store.get = func(string) ([]byte, bool, error) {
 		return []byte{}, false, errors.New("test")
@@ -154,7 +154,7 @@ func TestErrorLoadingSession(t *testing.T) {
 
 func TestErrorSaveSession(t *testing.T) {
 	store := &mockstore{}
-	sm := session.NewManager(store)
+	sm := httpx.NewSessionManager(store)
 
 	store.get = func(string) ([]byte, bool, error) {
 		return []byte{}, false, nil
@@ -185,7 +185,7 @@ func TestErrorSaveSession(t *testing.T) {
 
 func TestErrorDeleteSession(t *testing.T) {
 	store := &mockstore{}
-	sm := session.NewManager(store)
+	sm := httpx.NewSessionManager(store)
 
 	store.get = func(string) ([]byte, bool, error) {
 		return []byte{}, false, nil
@@ -221,7 +221,7 @@ func TestErrorDeleteSession(t *testing.T) {
 
 func TestDestroySession(t *testing.T) {
 	store := &mockstore{}
-	sm := session.NewManager(store)
+	sm := httpx.NewSessionManager(store)
 
 	store.get = func(string) ([]byte, bool, error) {
 		return []byte{}, false, nil
@@ -257,11 +257,8 @@ func TestDestroySession(t *testing.T) {
 
 func TestSessionIdleTimeout(t *testing.T) {
 	store := &mockstore{}
-	sm := session.NewManager(store,
-		session.WithIdleTimeout(10*time.Minute),
-		session.WithHttpOnly(true),
-		session.WithPersisted(true),
-	)
+	sm := httpx.NewSessionManager(store)
+	sm.SetIdleTimeout(10 * time.Minute)
 
 	store.get = func(string) ([]byte, bool, error) {
 		return []byte{}, false, errors.New("test")
@@ -288,7 +285,7 @@ func TestSessionIdleTimeout(t *testing.T) {
 
 func TestSessionValues(t *testing.T) {
 	store := &mockstore{}
-	sm := session.NewManager(store)
+	sm := httpx.NewSessionManager(store)
 
 	store.get = func(string) ([]byte, bool, error) {
 		return []byte{}, false, nil

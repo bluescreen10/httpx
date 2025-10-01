@@ -1,4 +1,4 @@
-package etag_test
+package httpx_test
 
 import (
 	"bytes"
@@ -8,7 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/bluescreen10/httpx/etag"
+	"github.com/bluescreen10/httpx"
 )
 
 func TestGenerateETag(t *testing.T) {
@@ -21,8 +21,8 @@ func TestGenerateETag(t *testing.T) {
 		w.Write(body)
 	})
 
-	mw := etag.New()
-	handler := mw.Handler(h)
+	etag := httpx.ETag()
+	handler := etag(h)
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/", &bytes.Buffer{})
 	handler.ServeHTTP(w, r)
@@ -42,8 +42,8 @@ func TestNotModified(t *testing.T) {
 		w.Write(body)
 	})
 
-	mw := etag.New()
-	handler := mw.Handler(h)
+	etag := httpx.ETag()
+	handler := etag(h)
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/", &bytes.Buffer{})
 	r.Header.Set("If-None-Match", reqEtag)
@@ -69,8 +69,8 @@ func TestEtagCache(t *testing.T) {
 		}
 	})
 
-	mw := etag.New()
-	handler := mw.Handler(h)
+	etag := httpx.ETag()
+	handler := etag(h)
 
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/", &bytes.Buffer{})
@@ -93,8 +93,8 @@ func TestGenerateWeakETag(t *testing.T) {
 		w.Write(body)
 	})
 
-	mw := etag.New(etag.WithWeak(true))
-	handler := mw.Handler(h)
+	etag := httpx.ETagWithConfig(httpx.ETagConfig{IsWeak: true})
+	handler := etag(h)
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/", &bytes.Buffer{})
 	handler.ServeHTTP(w, r)
@@ -112,8 +112,8 @@ func TestGenerateSkipETag(t *testing.T) {
 		w.Write(body)
 	})
 
-	mw := etag.New(etag.WithWeak(true))
-	handler := mw.Handler(h)
+	etag := httpx.ETagWithConfig(httpx.ETagConfig{IsWeak: true})
+	handler := etag(h)
 
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/", &bytes.Buffer{})
@@ -132,8 +132,8 @@ func TestGenerateSkipETagOnMethod(t *testing.T) {
 		w.Write(body)
 	})
 
-	mw := etag.New(etag.WithWeak(true))
-	handler := mw.Handler(h)
+	etag := httpx.ETagWithConfig(httpx.ETagConfig{IsWeak: true})
+	handler := etag(h)
 
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodPost, "/", &bytes.Buffer{})

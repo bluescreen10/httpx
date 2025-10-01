@@ -13,7 +13,7 @@ import (
 //	mux := httpx.NewServeMux()
 //
 //	// Global middleware for all routes
-//	mux.Use(loggerMiddleware)
+//	mux.Use(httpx.Logger())
 //
 //	// Route group with prefix "/api" and additional middleware
 //	api := mux.Group("/api", authMiddleware)
@@ -25,14 +25,15 @@ import (
 //	http.ListenAndServe(":8080", mux)
 type ServeMux struct {
 	*http.ServeMux
-	middlewares []Middleware
+	handler http.Handler
 }
 
 // NewServeMux creates a new ServeMux instance.
 func NewServeMux() *ServeMux {
-	return &ServeMux{
-		ServeMux: http.NewServeMux(),
-	}
+	mux := new(ServeMux)
+	mux.ServeMux = http.NewServeMux()
+	mux.handler = mux.ServeMux
+	return mux
 }
 
 // Group creates a sub-router with the given prefix and optional middlewares.
@@ -45,7 +46,7 @@ func (mux *ServeMux) Group(prefix string, middlewares ...Middleware) *ServeMux {
 	var wrapped http.Handler = subMux
 
 	for i := len(middlewares) - 1; i >= 0; i-- {
-		wrapped = middlewares[i].Handler(wrapped)
+		wrapped = middlewares[i](wrapped)
 	}
 
 	mux.Handle(prefix+"/", http.StripPrefix(prefix, wrapped))
@@ -54,18 +55,12 @@ func (mux *ServeMux) Group(prefix string, middlewares ...Middleware) *ServeMux {
 
 // Use adds a global middleware to the ServeMux. These middlewares are applied
 // to all routes registered on this mux.
-func (mux *ServeMux) Use(mw Middleware) {
-	mux.middlewares = append(mux.middlewares, mw)
+func (mux *ServeMux) Use(middleware Middleware) {
+	mux.handler = middleware(mux.handler)
 }
 
 // ServeHTTP implements http.Handler and applies global middlewares
 // before dispatching to the underlying http.ServeMux.
 func (mux *ServeMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	var wrapped http.Handler = mux.ServeMux
-
-	for i := len(mux.middlewares) - 1; i >= 0; i-- {
-		wrapped = mux.middlewares[i].Handler(wrapped)
-	}
-
-	wrapped.ServeHTTP(w, r)
+	mux.handler.ServeHTTP(w, r)
 }

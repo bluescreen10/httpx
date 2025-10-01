@@ -1,4 +1,4 @@
-package livereload_test
+package httpx_test
 
 import (
 	"bytes"
@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bluescreen10/httpx/livereload"
+	"github.com/bluescreen10/httpx"
 )
 
 func TestLiveReloadInjection(t *testing.T) {
@@ -19,8 +19,8 @@ func TestLiveReloadInjection(t *testing.T) {
 		w.WriteHeader(200)
 		fmt.Fprintf(w, "<html><body><h1>Hello</h1></body></html>")
 	})
-	lr := livereload.New()
-	ts := httptest.NewServer(lr.Handler(handler))
+	lr := httpx.LiveReload()
+	ts := httptest.NewServer(lr(handler))
 	defer ts.Close()
 
 	res, err := http.Get(ts.URL)
@@ -44,8 +44,8 @@ func TestLiveReloadInjectionWithoutWriteHeader(t *testing.T) {
 		w.Header().Set("Content-Type", "text/html")
 		fmt.Fprintf(w, "<html><body><h1>Hello</h1></body></html>")
 	})
-	lr := livereload.New()
-	ts := httptest.NewServer(lr.Handler(handler))
+	lr := httpx.LiveReload()
+	ts := httptest.NewServer(lr(handler))
 	defer ts.Close()
 
 	res, err := http.Get(ts.URL)
@@ -71,8 +71,8 @@ func TestLiveReloadSkipInjection(t *testing.T) {
 		fmt.Fprintf(w, "{\"dummy\": \"\"}")
 	})
 
-	lr := livereload.New()
-	ts := httptest.NewServer(lr.Handler(handler))
+	lr := httpx.LiveReload()
+	ts := httptest.NewServer(lr(handler))
 	defer ts.Close()
 
 	res, err := http.Get(ts.URL)
@@ -98,8 +98,8 @@ func TestLiveReloadSkipInjectionPartial(t *testing.T) {
 		fmt.Fprintf(w, "<h1>Hello</h1>")
 	})
 
-	lr := livereload.New()
-	ts := httptest.NewServer(lr.Handler(handler))
+	lr := httpx.LiveReload()
+	ts := httptest.NewServer(lr(handler))
 	defer ts.Close()
 
 	res, err := http.Get(ts.URL)
@@ -125,8 +125,8 @@ func TestLiveReloadInjectionWithConfig(t *testing.T) {
 		w.WriteHeader(200)
 		fmt.Fprintf(w, "<html><body><h1>Hello</h1></body></html>")
 	})
-	lr := livereload.New(livereload.WithPath(path))
-	ts := httptest.NewServer(lr.Handler(handler))
+	lr := httpx.LiveReloadWithConfig(httpx.LiveReloadConfig{Path: path})
+	ts := httptest.NewServer(lr(handler))
 	defer ts.Close()
 
 	res, err := http.Get(ts.URL)
@@ -147,8 +147,8 @@ func TestLiveReloadInjectionWithConfig(t *testing.T) {
 
 func TestLiveReloadSSE(t *testing.T) {
 	dummyHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
-	lr := livereload.New()
-	s := lr.Handler(dummyHandler)
+	lr := httpx.LiveReload()
+	s := lr(dummyHandler)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -179,8 +179,8 @@ func TestLiveReloadStatusCode(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotModified)
 	})
-	lr := livereload.New()
-	ts := httptest.NewServer(lr.Handler(handler))
+	lr := httpx.LiveReload()
+	ts := httptest.NewServer(lr(handler))
 	defer ts.Close()
 
 	res, err := http.Get(ts.URL)

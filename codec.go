@@ -1,7 +1,7 @@
 // Codec defines how session values and metadata (like creation time)
 // are serialized to and from bytes, allowing them to be stored or transmitted.
 // The package includes a default implementation using Go's `encoding/gob`.
-package session
+package httpx
 
 import (
 	"bytes"
@@ -19,11 +19,11 @@ type Codec interface {
 }
 
 // Ensure gobCodec implements Codec.
-var _ Codec = gobCodec{}
+var _ Codec = GobCodec{}
 
 // gobCodec is a Codec implementation using Go's encoding/gob. It serializes
 // a gobData struct containing the creation time and session values.
-type gobCodec struct{}
+type GobCodec struct{}
 
 type gobData struct {
 	CreatedAt time.Time
@@ -32,7 +32,7 @@ type gobData struct {
 
 // Encode serializes the creation time and session values into a byte slice
 // using gob encoding.
-func (gobCodec) Encode(createdAt time.Time, values map[string]any) ([]byte, error) {
+func (GobCodec) Encode(createdAt time.Time, values map[string]any) ([]byte, error) {
 
 	var buf bytes.Buffer
 	encoder := gob.NewEncoder(&buf)
@@ -47,7 +47,7 @@ func (gobCodec) Encode(createdAt time.Time, values map[string]any) ([]byte, erro
 
 // Decode deserializes the data into a creation time and session values
 // using gob decoding.
-func (gobCodec) Decode(data []byte) (time.Time, map[string]any, error) {
+func (GobCodec) Decode(data []byte) (time.Time, map[string]any, error) {
 
 	buf := bytes.NewBuffer(data)
 	decoder := gob.NewDecoder(buf)
