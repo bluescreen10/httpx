@@ -96,3 +96,22 @@ func TestGroupWithMiddlewares(t *testing.T) {
 		t.Fatalf("expected header value to be 'test' got '%s'", h)
 	}
 }
+
+func TestStatic(t *testing.T) {
+	mux := httpx.NewServeMux()
+	mux.Static("/static/", ".")
+
+	r := httptest.NewRequest("GET", "/static/README.md", &bytes.Buffer{})
+	w := httptest.NewRecorder()
+
+	mux.ServeHTTP(w, r)
+
+	body, err := io.ReadAll(w.Body)
+	if err != nil {
+		t.Fatalf("error reading body")
+	}
+
+	if len(body) == 0 {
+		t.Fatal("expected body to have contenst but got ''")
+	}
+}

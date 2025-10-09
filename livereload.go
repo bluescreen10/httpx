@@ -13,11 +13,11 @@
 //	})
 //
 //	// Create a new LiveReload middleware (optional custom path)
-//	lr := httpx.LiveReload() // or httpx.LiveReloadWithConfig(LiveReloadConfig{...})
+//	lr := httpx.NewLiveReload()
 //
 //	// Wrap the mux with the middleware
 //
-//	http.ListenAndServe(":8080", lr(mux))
+//	http.ListenAndServe(":8080", lr.Handler(mux))
 //
 // Only responses with "Content-Type: text/html" and a closing </body>
 // tag will be modified to inject the script. Non-HTML responses pass
@@ -31,6 +31,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -43,76 +44,106 @@ var script []byte
 const defaultLiveReloadPath = "/_livereload"
 
 // LiveReloadConfig is the optional configuration for live reload
-type LiveReloadConfig struct {
+type LiveReload struct {
 	// Path sets the path to be used for SSE
-	Path string
+	path string
 
-	// Reload can be used to force the client to reload. This can
-	// be used to force the client to reload when assets change
-	Reload <-chan struct{}
-}
-
-var DefaultLiveReloadConfig = LiveReloadConfig{
-	Path: defaultLiveReloadPath,
+	subscribers []chan (struct{})
+	mu          sync.RWMutex
 }
 
 // LiveReload retuns a middleware that will inject a small script on the
 // page. This script will automatically reload the page if the server sends
 // an event, or if it gets restarted.
-func LiveReload() Middleware {
-	return LiveReloadWithConfig(DefaultLiveReloadConfig)
+func NewLiveReload() *LiveReload {
+	return &LiveReload{path: "/_livereload"}
+}
+
+// SetPath allows changing the path used for the javascript library to receive
+// Server-Side Events (default: "/_livereload").
+func (lr *LiveReload) SetPath(path string) {
+	lr.path = path
 }
 
 // LiveReloadWithConfig returns a LiveReload middleware with the specified
 // configuration.
-func LiveReloadWithConfig(cfg LiveReloadConfig) Middleware {
-	js := bytes.ReplaceAll(script, []byte(defaultLiveReloadPath), []byte(cfg.Path))
+func (lr *LiveReload) Handler(next http.Handler) http.Handler {
+	js := bytes.ReplaceAll(script, []byte(defaultLiveReloadPath), []byte(lr.path))
 
-	if cfg.Reload == nil {
-		cfg.Reload = make(chan struct{})
-	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == lr.path {
+			lr.handleClientConn(w, r)
+			return
+		}
 
-	return func(next http.Handler) http.Handler {
+		buf := &bytes.Buffer{}
+		rw := newResponseWriter(buf, w.Header(), nil)
+		next.ServeHTTP(rw, r)
 
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == cfg.Path {
-				handleClientConn(w, r, cfg.Reload)
-				return
+		body := buf.Bytes()
+		closingBodyAt := bytes.Index(body, []byte("</body>"))
+		contentType := rw.Header().Get("Content-Type")
+		validContentType := contentType == "" || strings.Contains(contentType, "text/html")
+
+		if validContentType && closingBodyAt != -1 {
+			w.Header().Set("Content-Length", strconv.Itoa(len(body)+len(js)))
+			if rw.status != 0 {
+				w.WriteHeader(rw.status)
 			}
-
-			buf := &bytes.Buffer{}
-			rw := newResponseWriter(buf, w.Header(), nil)
-			next.ServeHTTP(rw, r)
-
-			body := buf.Bytes()
-			closingBodyAt := bytes.Index(body, []byte("</body>"))
-			contentType := rw.Header().Get("Content-Type")
-			validContentType := contentType == "" || strings.Contains(contentType, "text/html")
-
-			if validContentType && closingBodyAt != -1 {
-				w.Header().Set("Content-Length", strconv.Itoa(len(body)+len(js)))
-				if rw.status != 0 {
-					w.WriteHeader(rw.status)
-				}
-				w.Write(body[:closingBodyAt])
-				w.Write(js)
-				w.Write(body[closingBodyAt:])
-			} else {
-				if rw.status != 0 {
-					w.WriteHeader(rw.status)
-				}
-				w.Write(body)
+			w.Write(body[:closingBodyAt])
+			w.Write(js)
+			w.Write(body[closingBodyAt:])
+		} else {
+			if rw.status != 0 {
+				w.WriteHeader(rw.status)
 			}
-		})
+			w.Write(body)
+		}
+	})
+}
+
+// Reload will trigger a reload of the current page in the browser.
+// This can be used in combination with file watcher to force a page
+// reload.
+func (lr *LiveReload) Reload() {
+	//notify subscribers
+	lr.mu.RLock()
+	defer lr.mu.RUnlock()
+	for _, ch := range lr.subscribers {
+		ch <- struct{}{}
 	}
 }
 
-func handleClientConn(w http.ResponseWriter, r *http.Request, reload <-chan struct{}) {
+func (lr *LiveReload) subscribe() chan (struct{}) {
+	lr.mu.Lock()
+	defer lr.mu.Unlock()
+	ch := make(chan (struct{}))
+	lr.subscribers = append(lr.subscribers, ch)
+	return ch
+}
+
+func (lr *LiveReload) unsubscribe(ch chan (struct{})) {
+	lr.mu.Lock()
+	defer lr.mu.Unlock()
+	defer close(ch)
+
+	for i, subscriber := range lr.subscribers {
+		if subscriber == ch {
+			lr.subscribers = append(lr.subscribers[:i], lr.subscribers[i+1:]...)
+			break
+		}
+	}
+}
+
+func (lr *LiveReload) handleClientConn(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Headers", "Cache-Control")
+
+	reloadCh := lr.subscribe()
+	defer lr.unsubscribe(reloadCh)
 
 	// send timestamp, the client reloads when the timestamp
 	// changes. The first time the client does not do a
@@ -125,7 +156,7 @@ func handleClientConn(w http.ResponseWriter, r *http.Request, reload <-chan stru
 		return
 
 	// send new timestamp
-	case <-reload:
+	case <-reloadCh:
 		sendReload(w)
 	}
 }

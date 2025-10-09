@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bluescreen10/httpx"
 )
@@ -19,8 +20,8 @@ func TestLiveReloadInjection(t *testing.T) {
 		w.WriteHeader(200)
 		fmt.Fprintf(w, "<html><body><h1>Hello</h1></body></html>")
 	})
-	lr := httpx.LiveReload()
-	ts := httptest.NewServer(lr(handler))
+	lr := httpx.NewLiveReload()
+	ts := httptest.NewServer(lr.Handler(handler))
 	defer ts.Close()
 
 	res, err := http.Get(ts.URL)
@@ -44,8 +45,8 @@ func TestLiveReloadInjectionWithoutWriteHeader(t *testing.T) {
 		w.Header().Set("Content-Type", "text/html")
 		fmt.Fprintf(w, "<html><body><h1>Hello</h1></body></html>")
 	})
-	lr := httpx.LiveReload()
-	ts := httptest.NewServer(lr(handler))
+	lr := httpx.NewLiveReload()
+	ts := httptest.NewServer(lr.Handler(handler))
 	defer ts.Close()
 
 	res, err := http.Get(ts.URL)
@@ -71,8 +72,8 @@ func TestLiveReloadSkipInjection(t *testing.T) {
 		fmt.Fprintf(w, "{\"dummy\": \"\"}")
 	})
 
-	lr := httpx.LiveReload()
-	ts := httptest.NewServer(lr(handler))
+	lr := httpx.NewLiveReload()
+	ts := httptest.NewServer(lr.Handler(handler))
 	defer ts.Close()
 
 	res, err := http.Get(ts.URL)
@@ -98,8 +99,8 @@ func TestLiveReloadSkipInjectionPartial(t *testing.T) {
 		fmt.Fprintf(w, "<h1>Hello</h1>")
 	})
 
-	lr := httpx.LiveReload()
-	ts := httptest.NewServer(lr(handler))
+	lr := httpx.NewLiveReload()
+	ts := httptest.NewServer(lr.Handler(handler))
 	defer ts.Close()
 
 	res, err := http.Get(ts.URL)
@@ -125,8 +126,9 @@ func TestLiveReloadInjectionWithConfig(t *testing.T) {
 		w.WriteHeader(200)
 		fmt.Fprintf(w, "<html><body><h1>Hello</h1></body></html>")
 	})
-	lr := httpx.LiveReloadWithConfig(httpx.LiveReloadConfig{Path: path})
-	ts := httptest.NewServer(lr(handler))
+	lr := httpx.NewLiveReload()
+	lr.SetPath(path)
+	ts := httptest.NewServer(lr.Handler(handler))
 	defer ts.Close()
 
 	res, err := http.Get(ts.URL)
@@ -147,8 +149,8 @@ func TestLiveReloadInjectionWithConfig(t *testing.T) {
 
 func TestLiveReloadSSE(t *testing.T) {
 	dummyHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
-	lr := httpx.LiveReload()
-	s := lr(dummyHandler)
+	lr := httpx.NewLiveReload()
+	s := lr.Handler(dummyHandler)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -158,11 +160,6 @@ func TestLiveReloadSSE(t *testing.T) {
 	s.ServeHTTP(w, r)
 
 	res := w.Result()
-	body, err := io.ReadAll(res.Body)
-	defer res.Body.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	if res.Header.Get("Content-Type") != "text/event-stream" &&
 		res.Header.Get("CaChe-Control") != "no-cache" &&
@@ -170,7 +167,7 @@ func TestLiveReloadSSE(t *testing.T) {
 		t.Fatal("headers not set correctly")
 	}
 
-	if !strings.Contains(string(body), "data: ts=") {
+	if !strings.Contains((w.Body.String()), "data: ts=") {
 		t.Fatal("missing event data")
 	}
 }
@@ -179,8 +176,8 @@ func TestLiveReloadStatusCode(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotModified)
 	})
-	lr := httpx.LiveReload()
-	ts := httptest.NewServer(lr(handler))
+	lr := httpx.NewLiveReload()
+	ts := httptest.NewServer(lr.Handler(handler))
 	defer ts.Close()
 
 	res, err := http.Get(ts.URL)
@@ -190,5 +187,38 @@ func TestLiveReloadStatusCode(t *testing.T) {
 
 	if res.StatusCode != http.StatusNotModified {
 		t.Fatalf("expecetd status code '%d' got '%d'", http.StatusNotModified, res.StatusCode)
+	}
+}
+
+func TestLiveReloadSSEReload(t *testing.T) {
+	dummyHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+	lr := httpx.NewLiveReload()
+	s := lr.Handler(dummyHandler)
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	r := httptest.NewRequest("GET", "/_livereload", &bytes.Buffer{}).WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	done := make(chan struct{})
+	go func() {
+		s.ServeHTTP(w, r)
+		<-done
+	}()
+
+	defer cancel()
+	defer func() { done <- struct{}{} }()
+
+	time.Sleep(5 * time.Millisecond)
+	ts1 := w.Body.String()
+
+	// trigger reload
+	lr.Reload()
+
+	time.Sleep(5 * time.Millisecond)
+	ts2 := w.Body.String()
+
+	if ts2 <= ts1 {
+		t.Fatalf("expected second timestamp '%s' to be greather than the first '%s'", ts2, ts1)
 	}
 }

@@ -53,6 +53,18 @@ func (mux *ServeMux) Group(prefix string, middlewares ...Middleware) *ServeMux {
 	return subMux
 }
 
+// Static mounts a file server with the give prefix and optional middlewares.
+// The dir specifies the root of the file server.
+func (mux *ServeMux) Static(prefix, dir string, middlewares ...Middleware) {
+	handler := http.FileServer(http.Dir(dir))
+
+	for i := len(middlewares) - 1; i >= 0; i-- {
+		handler = middlewares[i](handler)
+	}
+
+	mux.Handle(prefix, http.StripPrefix(prefix, handler))
+}
+
 // Use adds a global middleware to the ServeMux. These middlewares are applied
 // to all routes registered on this mux.
 func (mux *ServeMux) Use(middleware Middleware) {
