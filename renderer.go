@@ -44,6 +44,7 @@ type Renderer struct {
 	templates *template.Template
 	loaded    atomic.Bool
 	mu        sync.Mutex
+	funcs     template.FuncMap
 }
 
 // NewRenderer creates a new Renderer that loads templates from the given
@@ -58,6 +59,7 @@ func NewRenderer(dir fs.FS, pattern string) *Renderer {
 		dir:       dir,
 		pattern:   pattern,
 		templates: template.New(""),
+		funcs:     template.FuncMap{},
 	}
 }
 
@@ -73,7 +75,12 @@ var buffers = sync.Pool{
 // Funcs registers custom template functions that will be available
 // in all templates. This must be called before any templates are rendered.
 func (v *Renderer) Funcs(funcs template.FuncMap) {
-	v.templates.Funcs(funcs)
+	v.mu.Lock()
+	defer v.mu.Unlock()
+
+	for n, f := range funcs {
+		v.funcs[n] = f
+	}
 }
 
 // Html renders the named template with the given values and writes
@@ -112,6 +119,9 @@ func (v *Renderer) Render(w io.Writer, template string, vals Vals) error {
 // on the next render. This is useful for development when templates
 // are modified without restarting the application.
 func (v *Renderer) Reload() {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	v.templates = template.New("")
 	v.loaded.Store(false)
 }
 
@@ -122,6 +132,8 @@ func (v *Renderer) load() error {
 	if v.loaded.Load() {
 		return nil
 	}
+
+	v.templates.Funcs(v.funcs)
 
 	err := fs.WalkDir(v.dir, ".", func(path string, e fs.DirEntry, err error) error {
 		if err != nil {
