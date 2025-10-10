@@ -2,6 +2,7 @@ package httpx
 
 import (
 	"bytes"
+	"errors"
 	"html/template"
 	"io"
 	"io/fs"
@@ -42,9 +43,10 @@ type Renderer struct {
 	dir       fs.FS
 	pattern   string
 	templates *template.Template
-	loaded    atomic.Bool
 	mu        sync.Mutex
 	funcs     template.FuncMap
+
+	loaded atomic.Bool
 }
 
 // NewRenderer creates a new Renderer that loads templates from the given
@@ -59,7 +61,11 @@ func NewRenderer(dir fs.FS, pattern string) *Renderer {
 		dir:       dir,
 		pattern:   pattern,
 		templates: template.New(""),
-		funcs:     template.FuncMap{},
+		funcs: template.FuncMap{
+			"embed": func() (template.HTML, error) {
+				return "", errors.New("embed should never be called")
+			},
+		},
 	}
 }
 
@@ -87,9 +93,12 @@ func (v *Renderer) Funcs(funcs template.FuncMap) {
 // the result to the HTTP response with appropriate headers.
 // The Content-Type is set to "text/html; charset=utf-8" and the
 // status code is set to 200 OK.
-func (v *Renderer) Html(w http.ResponseWriter, template string, vals Vals) error {
+func (v *Renderer) Html(w http.ResponseWriter, tmpl string, vals Vals, layouts ...string) error {
 	buf := buffers.Get().(*bytes.Buffer)
-	err := v.Render(buf, template, vals)
+	defer buffers.Put(buf)
+	buf.Reset()
+
+	err := v.Render(buf, tmpl, vals, layouts...)
 	if err != nil {
 		return err
 	}
@@ -102,17 +111,41 @@ func (v *Renderer) Html(w http.ResponseWriter, template string, vals Vals) error
 
 // Render executes the named template with the given values and writes
 // the output to w. Templates are loaded lazily on first use and cached
-// for subsequent renders.
-func (v *Renderer) Render(w io.Writer, template string, vals Vals) error {
+// for subsequent renders. You can pass an optional template name to
+// be used as layout (base template)
+func (v *Renderer) Render(w io.Writer, tmpl string, vals Vals, layouts ...string) error {
 
 	if !v.loaded.Load() {
 		if err := v.load(); err != nil {
 			return err
 		}
-
 	}
 
-	return v.templates.ExecuteTemplate(w, template, vals)
+	var layout string
+	for _, l := range layouts {
+		if l != "" {
+			layout = l
+			break
+		}
+	}
+
+	if layout != "" {
+		v.mu.Lock()
+		defer v.mu.Unlock()
+		t := tmpl
+		v.templates.Funcs(template.FuncMap{
+			"embed": func() (template.HTML, error) {
+				w := buffers.Get().(*bytes.Buffer)
+				defer buffers.Put(w)
+				w.Reset()
+				err := v.templates.ExecuteTemplate(w, t, vals)
+				return template.HTML(w.String()), err
+			},
+		})
+		tmpl = layout
+	}
+
+	return v.templates.ExecuteTemplate(w, tmpl, vals)
 }
 
 // Reload marks all templates as stale, forcing them to be reloaded
