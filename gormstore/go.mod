@@ -1,6 +1,6 @@
 module github.com/bluescreen10/httpx/gormstore
 
-go 1.25.1
+go 1.24
 
 require (
 	gorm.io/driver/sqlite v1.6.0
