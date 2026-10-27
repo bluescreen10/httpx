@@ -89,22 +89,30 @@ func (v *Renderer) Funcs(funcs template.FuncMap) {
 	}
 }
 
-// Html renders the named template with the given values and writes
+// Html renders the named template with the given the data and writes
 // the result to the HTTP response with appropriate headers.
 // The Content-Type is set to "text/html; charset=utf-8" and the
 // status code is set to 200 OK.
-func (v *Renderer) Html(w http.ResponseWriter, tmpl string, vals Vals, layouts ...string) error {
+func (v *Renderer) Html(w http.ResponseWriter, tmpl string, data any, layouts ...string) error {
+	return v.HtmlWithStatus(w, http.StatusOK, tmpl, data, layouts...)
+}
+
+// HtmlWithStatus renders the named template with the given the status and data,
+// and writes the result to the HTTP response with appropriate headers.
+// The Content-Type is set to "text/html; charset=utf-8" and the
+// status code is set to 200 OK.
+func (v *Renderer) HtmlWithStatus(w http.ResponseWriter, status int, tmpl string, data any, layouts ...string) error {
 	buf := buffers.Get().(*bytes.Buffer)
 	defer buffers.Put(buf)
 	buf.Reset()
 
-	err := v.Render(buf, tmpl, vals, layouts...)
+	err := v.Render(buf, tmpl, data, layouts...)
 	if err != nil {
 		return err
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(status)
 	w.Write(buf.Bytes())
 	return nil
 }
@@ -113,7 +121,7 @@ func (v *Renderer) Html(w http.ResponseWriter, tmpl string, vals Vals, layouts .
 // the output to w. Templates are loaded lazily on first use and cached
 // for subsequent renders. You can pass an optional template name to
 // be used as layout (base template)
-func (v *Renderer) Render(w io.Writer, tmpl string, vals Vals, layouts ...string) error {
+func (v *Renderer) Render(w io.Writer, tmpl string, data any, layouts ...string) error {
 
 	if !v.loaded.Load() {
 		if err := v.load(); err != nil {
@@ -138,14 +146,14 @@ func (v *Renderer) Render(w io.Writer, tmpl string, vals Vals, layouts ...string
 				w := buffers.Get().(*bytes.Buffer)
 				defer buffers.Put(w)
 				w.Reset()
-				err := v.templates.ExecuteTemplate(w, t, vals)
+				err := v.templates.ExecuteTemplate(w, t, data)
 				return template.HTML(w.String()), err
 			},
 		})
 		tmpl = layout
 	}
 
-	return v.templates.ExecuteTemplate(w, tmpl, vals)
+	return v.templates.ExecuteTemplate(w, tmpl, data)
 }
 
 // Reload marks all templates as stale, forcing them to be reloaded

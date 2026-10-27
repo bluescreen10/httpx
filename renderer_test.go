@@ -29,6 +29,25 @@ func TestRenderer(t *testing.T) {
 	}
 }
 
+func TestRendererWithStatus(t *testing.T) {
+	r := httpx.NewRenderer(os.DirFS("."), ".html")
+	w := httptest.NewRecorder()
+	testString := "hello world"
+	r.HtmlWithStatus(w, http.StatusCreated, "renderer_test", httpx.Vals{"test": testString})
+
+	if body := w.Body.String(); body != testString {
+		t.Fatalf("expected body '%s' got '%s'", testString, body)
+	}
+
+	if w.Result().StatusCode != http.StatusCreated {
+		t.Fatalf("expected status code '200' got '%d'", w.Result().StatusCode)
+	}
+
+	if ct := w.Result().Header.Get("Content-Type"); ct != "text/html; charset=utf-8" {
+		t.Fatalf("expected content type 'text/html; charset=utf-8' got '%s'", ct)
+	}
+}
+
 func TestRendererWithLayout(t *testing.T) {
 	r := httpx.NewRenderer(os.DirFS("."), ".html")
 	w := httptest.NewRecorder()
