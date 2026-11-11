@@ -45,3 +45,37 @@ func main() {
     http.ListenAndServe(":8080", mux)
 }
 ```
+
+## Trusted proxies
+
+Configure proxy trust on the mux. The mux resolves `r.RemoteAddr` before global middleware, group middleware, and handlers run.
+
+```go
+mux := httpx.NewServeMuxWithConfig(httpx.ServeMuxConfig{
+    TrustProxy:      true,
+    TrustedProxies:  []string{"127.0.0.1", "172.18.0.0/24"},
+    TrustPrivateIPs: false,
+    ProxyHeader:    httpx.HeaderXForwardedFor,
+})
+mux.Use(httpx.Logger())
+```
+
+`TrustedProxies` accepts exact IP addresses and CIDR prefixes. `TrustPrivateIPs` additionally trusts RFC 1918, IPv6 ULA, and loopback addresses.
+The connected peer must be trusted. The mux then walks the header chain from right to left and selects the first untrusted address.
+Malformed addresses in that part of the chain preserve the original peer address. Nested muxes resolve a request once.
+
+Forwarded addresses retain Go's `IP:port` format. A header without a port produces port `0`.
+IPv6 and forwarded addresses with explicit ports are supported. `ProxyHeader` can name another header with the same address syntax, such as `CF-Connecting-IP`.
+
+`DefaultServeMuxConfig` disables proxy trust and selects `HeaderXForwardedFor`. `NewServeMux()` uses this default configuration.
+You can also customize a copy explicitly:
+
+```go
+config := httpx.DefaultServeMuxConfig
+config.TrustProxy = true
+config.TrustPrivateIPs = true
+mux := httpx.NewServeMuxWithConfig(config)
+```
+
+`TrustProxy` enables all proxy processing. Enable private-IP trust only when those peers can supply authoritative forwarding headers.
+An invalid trusted IP or CIDR causes `NewServerMux` to panic when proxy trust is enabled.
